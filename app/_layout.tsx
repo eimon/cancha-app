@@ -1,29 +1,56 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
+// app/_layout.tsx - Layout principal
+import { useEffect, useState } from 'react'
+import { Stack } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
+import { Provider as PaperProvider } from 'react-native-paper'
+import { supabase } from '../lib/supabase'
+import { Session } from '@supabase/supabase-js'
+import LoginScreen from '../components/LoginScreen'
+import UserProfileSetup from '../components/UserProfileSetup'
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [profileComplete, setProfileComplete] = useState(false)
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (loading) {
+    return null
+  }
+
+  if (!session) {
+    return (
+      <PaperProvider>
+        <StatusBar style="dark" />
+        <LoginScreen />
+      </PaperProvider>
+    )
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
+    <PaperProvider>
+      <StatusBar style="dark" />
+      {!profileComplete && (
+        <UserProfileSetup 
+          user={session.user} 
+          onProfileComplete={() => setProfileComplete(true)} 
+        />
+      )}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+    </PaperProvider>
+  )
 }
